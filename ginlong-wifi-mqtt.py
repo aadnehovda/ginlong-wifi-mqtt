@@ -2,13 +2,14 @@
 
 ###################################################################################################
 #
-#  Copyright 2015 Graham Whiteside, Manchester, UK. Version 0.4 Jun 2020.
+#  Copyright 2015 Graham Whiteside
+#  Copyright 2021 Scott Ware
 #
-#  read-ginlong is free software: you can redistribute it and/or modify it under the terms of the
+#  This program is free software: you can redistribute it and/or modify it under the terms of the
 #  GNU General Public License as published by the Free Software Foundation, either version 3 of the
 #  License, or (at your option) any later version.
 #
-#  read-ginlong is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
+#  This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
 #  even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU 
 #  General Public License for more details.
 #
@@ -16,37 +17,27 @@
 #
 ###################################################################################################
 
-###################################################################################################
-#
-#  Python program to read data sent from a single Ginlong/Solis 2G inverter equipped with a 
-#  Wi-Fi 'stick'.
-#
-#  Requires setting up the inverter stick to send data to the computer running the read-ginlong
-#  script. Settings located in the advanced settings, then remote server. Add a new 'remote
-#  server' with the ip address of your computer and port 9999. The inverter will send data every
-#  five minutes.
-#
-#  Output file format (space separated):-
-#	Date  Time   Watts_now   Day_kWh   Total_kWh 
-#
-#  Output of webserver file, format (space separated) file overwritten each update:-
-#	Date Time Watts_now Day_kWh Total_kWh DC_volts_1 DC_amps_1 DC_volts_2 DC_amps_2 AC_volts AC_amps AC_freq kwh_yesterday kwh_month kwh_last_month
-#
-#  The read-ginlong.py program is deliberately left simple without error reporting. It is intended
-#  as a 'starting point' and proof of concept. It could easily be modified to provide more
-#  information from the inverter. Furthermore the output log file can be further processed or
-#  loaded into other software such as LibreOffice Calc.
-#
-###################################################################################################
- 
-import socket, binascii, time
+import paho.mqtt.publish as publish
+import socket
+import binascii
+import time
+import sys
+import string
+import ConfigParser
+import io
 
+# Read config file
+with open("config.ini") as f:
+        sample_config = f.read()
+config = ConfigParser.RawConfigParser(allow_no_value=True)
+config.readfp(io.BytesIO(sample_config))
 
-# change these values to suit your requirements:- 
-HOST = ''	        	 				# Hostname or ip address of interface, leave blank for all
-PORT = 9999              				# listening on port 9999
-logfile = 'ginlong.log'					# location of output log file
-webfile = 'ginlong.status'				# location of web file
+# Variables
+listen_address = config.get('DEFAULT', 'listen_address')
+listen_port = int(config.get('DEFAULT', 'listen_port'))
+client_id = config.get('MQTT', 'client_id')
+mqtt_server = config.get('MQTT', 'mqtt_server')
+mqtt_port = int(config.get('MQTT', 'mqtt_port'))
  
 
 # inverter values found (so far) all big endian 16 bit unsigned:-
@@ -69,7 +60,7 @@ inverter_lmth = 91					# offset 91 & 92 total kWh for last month
 
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)   # create socket on required port
-sock.bind((HOST, PORT))
+sock.bind((listen_address, listen_port))
 
 
 while True:		# loop forever
