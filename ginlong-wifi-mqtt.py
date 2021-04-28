@@ -41,7 +41,7 @@ mqtt_port = int(config.get('MQTT', 'mqtt_port'))
  
 
 # inverter values found (so far) all big endian 16 bit unsigned:-
-header = '685951b0' 					# hex stream header
+header = '685951b0' 				# hex stream header
 data_size = 206                     # hex stream size 
 inverter_temp = 31 					# offset 31 & 32 temperature (/10)
 inverter_vdc1 = 33 					# offset 33 & 34 DC volts chain 1 (/10)
@@ -60,47 +60,69 @@ inverter_lmth = 91					# offset 91 & 92 total kWh for last month
 
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)   # create socket on required port
+sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 sock.bind((listen_address, listen_port))
+sock.listen(1) # listen on port
 
+while True:
 
-while True:		# loop forever
-    sock.listen(1)							# listen on port
+    print 'Waiting for a connection...'
+    
     conn, addr = sock.accept()				# wait for inverter connection
+    
+    print 'Connection from', addr
+    
     rawdata = conn.recv(1000)				# read incoming data
     hexdata = binascii.hexlify(rawdata)		# convert data to hex
 
     if(hexdata[0:8] == header and len(hexdata) == data_size):		# check for valid data
-           
-																			# extract main values and convert to decimal
+        msgs = []
+        mqtt_topic = ''.join(["ginlong", "/", client_id, "/"])   # Create the topic base using the client_id
+
         watt_now = str(int(hexdata[inverter_now*2:inverter_now*2+4],16))    		# generating power in watts
+        msgs.append((mqtt_topic + "watt_now", watt_now, 0, False))
+
         kwh_day = str(float(int(hexdata[inverter_day*2:inverter_day*2+4],16))/100)	# running total kwh for day
+        msgs.append((mqtt_topic + "kwh_day", kwh_day, 0, False))
+
         kwh_total = str(int(hexdata[inverter_tot*2:inverter_tot*2+8],16)/10)		# running total kwh from installation
+        msgs.append((mqtt_topic + "kwh_total", kwh_total, 0, False))
 
-	temp = str(float(int(hexdata[inverter_temp*2:inverter_temp*2+4],16))/10)		# temperature																		# extract dc input values and convert to decimal
+        temp = str(float(int(hexdata[inverter_temp*2:inverter_temp*2+4],16))/10)    # temperature
+        msgs.append((mqtt_topic + "temp", temp, 0, False))
+
         dc_volts1= str(float(int(hexdata[inverter_vdc1*2:inverter_vdc1*2+4],16))/10)	# input dc volts from chain 1
+        msgs.append((mqtt_topic + "dc_volts1", dc_volts1, 0, False))
+
         dc_volts2= str(float(int(hexdata[inverter_vdc2*2:inverter_vdc2*2+4],16))/10)	# input dc volts from chain 2
+        msgs.append((mqtt_topic + "dc_volts2", dc_volts2, 0, False))
+
         dc_amps1 = str(float(int(hexdata[inverter_adc1*2:inverter_adc1*2+4],16))/10)	# input dc amps from chain 1
+        msgs.append((mqtt_topic + "dc_amps1", dc_amps1, 0, False))
+
         dc_amps2 = str(float(int(hexdata[inverter_adc2*2:inverter_adc2*2+4],16))/10)	# input dc amps from chain 2
+        msgs.append((mqtt_topic + "dc_amps2", dc_amps2, 0, False))
 
-																			# extract other ac values and convert to decimal
-        ac_volts = str(float(int(hexdata[inverter_vac*2:inverter_vac*2+4],16))/10)		# output ac volts 
-        ac_amps = str(float(int(hexdata[inverter_aac*2:inverter_aac*2+4],16))/10)		# output ac amps 
+        ac_volts = str(float(int(hexdata[inverter_vac*2:inverter_vac*2+4],16))/10)		# output ac volts
+        msgs.append((mqtt_topic + "ac_volts", ac_volts, 0, False))
+
+        ac_amps = str(float(int(hexdata[inverter_aac*2:inverter_aac*2+4],16))/10)		# output ac amps
+        msgs.append((mqtt_topic + "ac_amps", ac_amps, 0, False))
+
         ac_freq = str(float(int(hexdata[inverter_freq*2:inverter_freq*2+4],16))/100)	# output ac frequency hertz
+        msgs.append((mqtt_topic + "ac_freq", ac_freq, 0, False))
 
-																			# extract other historical values and convert to decimal
         kwh_yesterday = str(float(int(hexdata[inverter_yes*2:inverter_yes*2+4],16))/100)	# yesterday's kwh
-        kwh_month = str(int(hexdata[inverter_mth*2:inverter_mth*2+4],16))					# running total kwh for month
-        kwh_lastmonth = str(int(hexdata[inverter_lmth*2:inverter_lmth*2+4],16))				# running total kwh for last month
+        msgs.append((mqtt_topic + "kwh_yesterday", kwh_yesterday, 0, False))
 
+        kwh_month = str(int(hexdata[inverter_mth*2:inverter_mth*2+4],16))					# running total kwh for month
+        msgs.append((mqtt_topic + "kwh_month", kwh_month, 0, False))
+
+        kwh_lastmonth = str(int(hexdata[inverter_lmth*2:inverter_lmth*2+4],16))				# running total kwh for last month
+        msgs.append((mqtt_topic + "kwn_lastmonth", kwh_lastmonth, 0, False))
 
         timestamp = (time.strftime("%F %H:%M"))		# get date time
-  
-        log = open(logfile,'a')        # write data to logfile, main values only
-        log.write(timestamp + ' ' + watt_now + ' ' + kwh_day + ' ' + kwh_total + '\n')
-        log.close()
 
-        web = open(webfile,'w')        # output all values, possibly for webpage
-        web.write(timestamp + ' ' + watt_now + ' ' + kwh_day + ' ' + kwh_total + ' ' + dc_volts1 + ' ' + dc_amps1 + ' ' + dc_volts2 + ' ' + dc_amps2 + ' ' + ac_volts + ' ' + ac_amps + ' ' + ac_freq + ' ' + kwh_yesterday + ' ' + kwh_month + ' ' + kwh_lastmonth + ' ' + temp + '\n')
-        web.close()
+        publish.multiple(msgs, hostname=mqtt_server, port=mqtt_port, auth=None)
 
 conn.close()
