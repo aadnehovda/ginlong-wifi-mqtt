@@ -7,4 +7,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY ginlong-wifi-mqtt.py ./
 
-CMD python ./ginlong-wifi-mqtt.py -c /config/config.ini
+CMD ["/app/ginlong-wifi-mqtt.py", "-c", "/config/config.ini"]
+
+ENTRYPOINT ["python"]
