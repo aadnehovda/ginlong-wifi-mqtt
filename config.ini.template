@@ -6,3 +6,4 @@ listen_port = 9999
 client_id = home
 mqtt_server = localhost
 mqtt_port = 1883
+homeassistant = false

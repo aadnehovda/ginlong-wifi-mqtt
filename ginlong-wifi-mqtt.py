@@ -23,7 +23,7 @@ import binascii
 import time
 import sys
 import string
-import ConfigParser
+import configparser
 import io
 import getopt
 
@@ -45,36 +45,35 @@ inverter_tot = 71 					# offset 71 & 72 & 73 & 74 total kWh (/10)
 inverter_mth = 87					# offset 87 & 88 total kWh for month 
 inverter_lmth = 91					# offset 91 & 92 total kWh for last month 
 
-configfile = "config.ini"
+config_file = "config.ini"
 
 def main(argv):
     # Get command-line arguments
     try:
       opts, args = getopt.getopt(argv,"hc:",["config="])
     except getopt.GetoptError:
-        print 'ginlong-wifi-mqtt.py -c <configfile>'
+        print('ginlong-wifi-mqtt.py -c <configfile>')
         sys.exit(2)
 
     for opt, arg in opts:
         if opt == '-h':
-            print 'ginlong-wifi-mqtt.py -c <configfile>'
+            print('ginlong-wifi-mqtt.py -c <configfile>')
             sys.exit()
 
         elif opt in ("-c", "--config"):
-            configfile = arg
+            config_file = arg
 
     # Read config file
-    with open(configfile) as f:
-            sample_config = f.read()
-    config = ConfigParser.RawConfigParser(allow_no_value=True)
-    config.readfp(io.BytesIO(sample_config))
+    config = configparser.ConfigParser()
+    config.read_file(open(config_file))
 
     # Variables
-    listen_address = config.get('DEFAULT', 'listen_address')
-    listen_port = int(config.get('DEFAULT', 'listen_port'))
-    client_id = config.get('MQTT', 'client_id')
-    mqtt_server = config.get('MQTT', 'mqtt_server')
-    mqtt_port = int(config.get('MQTT', 'mqtt_port'))
+    listen_address = config.get('DEFAULT', 'listen_address', fallback='0.0.0.0')
+    listen_port = config.getint('DEFAULT', 'listen_port', fallback=9999)
+    client_id = config.get('MQTT', 'client_id', fallback='home')
+    mqtt_server = config.get('MQTT', 'mqtt_server', fallback='localhost')
+    mqtt_port = config.getint('MQTT', 'mqtt_port', fallback=1883)
+    homeassistant = config.getboolean('MQTT', 'homeassistant', fallback=False)
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)   # create socket on required port
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -83,11 +82,11 @@ def main(argv):
 
     while True:
 
-        print 'Waiting for a connection...'
+        print('Waiting for a connection...')
         
         conn, addr = sock.accept()				# wait for inverter connection
     
-        print 'Connection from', addr
+        print('Connection from', addr)
         
         rawdata = conn.recv(1000)				# read incoming data
         hexdata = binascii.hexlify(rawdata)		# convert data to hex
