@@ -26,6 +26,7 @@ import string
 import configparser
 import io
 import getopt
+import json
 
 # Inverter values found (so far) all big endian 16 bit unsigned
 header = '685951b0' 				# hex stream header
@@ -74,6 +75,33 @@ def main(argv):
     mqtt_server = config.get('MQTT', 'mqtt_server', fallback='localhost')
     mqtt_port = config.getint('MQTT', 'mqtt_port', fallback=1883)
     homeassistant = config.getboolean('MQTT', 'homeassistant', fallback=False)
+    mqtt_topic = ''.join(["ginlong", "/", "inverter", "_", client_id])
+
+    # Home Assistant
+    if (homeassistant):
+        discovery_msgs = []
+
+        # Generating power in watts
+        watt_now_topic = "homeassistant/sensor/inverter_" + client_id + "/watt_now/config"
+        watt_now_payload = {"device_class": "power", "device": {"identifiers": ["ginlong_" + client_id], "manufacturer": "Ginlong", "name": client_id}, "unique_id": client_id + "_watt_now_ginlong", "name": "Current Power", "state_topic": mqtt_topic, "unit_of_measurement": "W", "value_template": "{{ value_json.watt_now}}" }
+        discovery_msgs.append({'topic': watt_now_topic, 'payload': json.dumps(watt_now_payload)})
+
+        # Running total kWH for the day
+        kwh_day_topic = "homeassistant/sensor/inverter_" + client_id + "/kwh_day/config"
+        kwh_day_payload = {"device_class": "power", "device": {"identifiers": ["ginlong_" + client_id], "manufacturer": "Ginlong", "name": client_id}, "unique_id": client_id + "_kwh_day_ginlong", "name": "Yield Today", "state_topic": mqtt_topic, "unit_of_measurement": "kWH", "value_template": "{{ value_json.kwh_day}}"}
+        discovery_msgs.append({'topic': kwh_day_topic, 'payload': json.dumps(kwh_day_payload)})
+
+        # Running total kWH for all time
+        kwh_total_topic = "homeassistant/sensor/inverter_" + client_id + "/kwh_total/config"
+        kwh_total_payload = {"device_class": "power", "device": {"identifiers": ["ginlong_" + client_id], "manufacturer": "Ginlong", "name": client_id}, "unique_id": client_id + "_kwh_total_ginlong", "name": "Total Yield", "state_topic": mqtt_topic, "unit_of_measurement": "kWH", "value_template": "{{ value_json.kwh_total}}"}
+        discovery_msgs.append({'topic': kwh_total_topic, 'payload': json.dumps(kwh_total_payload)})
+
+        # Temperature
+        temp_topic = "homeassistant/sensor/inverter_" + client_id + "/temp/config"
+        temp_payload = {"device_class": "temperature", "device": {"identifiers": ["ginlong_" + client_id], "manufacturer": "Ginlong", "name": client_id}, "unique_id": client_id + "_temp_ginlong", "name": "Temperature", "state_topic": mqtt_topic, "unit_of_measurement": "°C", "value_template": "{{ value_json.temp}}"}
+        discovery_msgs.append({'topic': temp_topic, 'payload': json.dumps(temp_payload)})
+
+        publish.multiple(discovery_msgs, hostname=mqtt_server, port=mqtt_port, auth=None)
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)   # create socket on required port
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -91,55 +119,66 @@ def main(argv):
         rawdata = conn.recv(1000)				# read incoming data
         hexdata = binascii.hexlify(rawdata)		# convert data to hex
 
-        if(hexdata[0:8] == header and len(hexdata) == data_size):		# check for valid data
-            msgs = []
-            mqtt_topic = ''.join(["ginlong", "/", client_id, "/"])   # Create the topic base using the client_id
+        if (hexdata[0:8] == header and len(hexdata) == data_size):
+            status = {}
 
-            watt_now = str(int(hexdata[inverter_now*2:inverter_now*2+4],16))    		# generating power in watts
-            msgs.append((mqtt_topic + "watt_now", watt_now, 0, False))
+            # Current power in watts
+            watt_now = int(hexdata[inverter_now*2:inverter_now*2+4],16)
+            status["watt_now"] = watt_now
 
-            kwh_day = str(float(int(hexdata[inverter_day*2:inverter_day*2+4],16))/100)	# running total kwh for day
-            msgs.append((mqtt_topic + "kwh_day", kwh_day, 0, False))
+            # Yield today
+            kwh_day = float(int(hexdata[inverter_day*2:inverter_day*2+4],16))/100
+            status["kwh_day"] = kwh_day
 
-            kwh_total = str(int(hexdata[inverter_tot*2:inverter_tot*2+8],16)/10)		# running total kwh from installation
-            msgs.append((mqtt_topic + "kwh_total", kwh_total, 0, False))
+            # Total Yield
+            kwh_total = int(hexdata[inverter_tot*2:inverter_tot*2+8],16)/10
+            status["kwh_total"] = kwh_total
 
-            temp = str(float(int(hexdata[inverter_temp*2:inverter_temp*2+4],16))/10)    # temperature
-            msgs.append((mqtt_topic + "temp", temp, 0, False))
+            # Temperature
+            temp = float(int(hexdata[inverter_temp*2:inverter_temp*2+4],16))/10
+            status["temp"] = temp
 
-            dc_volts1= str(float(int(hexdata[inverter_vdc1*2:inverter_vdc1*2+4],16))/10)	# input dc volts from chain 1
-            msgs.append((mqtt_topic + "dc_volts1", dc_volts1, 0, False))
+            # Input DC Volts from Chain 1
+            dc_volts1= float(int(hexdata[inverter_vdc1*2:inverter_vdc1*2+4],16))/10
+            status["dc_volts1"] = dc_volts1
 
-            dc_volts2= str(float(int(hexdata[inverter_vdc2*2:inverter_vdc2*2+4],16))/10)	# input dc volts from chain 2
-            msgs.append((mqtt_topic + "dc_volts2", dc_volts2, 0, False))
+            # Input DC Volts from Chain 2
+            dc_volts2= float(int(hexdata[inverter_vdc2*2:inverter_vdc2*2+4],16))/10
+            status["dc_volts2"] = dc_volts2
 
-            dc_amps1 = str(float(int(hexdata[inverter_adc1*2:inverter_adc1*2+4],16))/10)	# input dc amps from chain 1
-            msgs.append((mqtt_topic + "dc_amps1", dc_amps1, 0, False))
+            # Input DC Amps from Chain 1
+            dc_amps1 = float(int(hexdata[inverter_adc1*2:inverter_adc1*2+4],16))/10
+            status["dc_amps1"] = dc_amps1
 
-            dc_amps2 = str(float(int(hexdata[inverter_adc2*2:inverter_adc2*2+4],16))/10)	# input dc amps from chain 2
-            msgs.append((mqtt_topic + "dc_amps2", dc_amps2, 0, False))
+            # Input DC Amps from Chain 2
+            dc_amps2 = float(int(hexdata[inverter_adc2*2:inverter_adc2*2+4],16))/10
+            status["dc_amps2"] = dc_amps2
 
-            ac_volts = str(float(int(hexdata[inverter_vac*2:inverter_vac*2+4],16))/10)		# output ac volts
-            msgs.append((mqtt_topic + "ac_volts", ac_volts, 0, False))
+            # Output AC Volts
+            ac_volts = float(int(hexdata[inverter_vac*2:inverter_vac*2+4],16))/10
+            status["ac_volts"] = ac_volts
 
-            ac_amps = str(float(int(hexdata[inverter_aac*2:inverter_aac*2+4],16))/10)		# output ac amps
-            msgs.append((mqtt_topic + "ac_amps", ac_amps, 0, False))
+            # Output AC Amps
+            ac_amps = float(int(hexdata[inverter_aac*2:inverter_aac*2+4],16))/10
+            status["ac_amps"] = ac_amps
 
-            ac_freq = str(float(int(hexdata[inverter_freq*2:inverter_freq*2+4],16))/100)	# output ac frequency hertz
-            msgs.append((mqtt_topic + "ac_freq", ac_freq, 0, False))
+            # Output AC Frequency Hz
+            ac_freq = float(int(hexdata[inverter_freq*2:inverter_freq*2+4],16))/100
+            status["ac_freq"] = ac_freq
 
-            kwh_yesterday = str(float(int(hexdata[inverter_yes*2:inverter_yes*2+4],16))/100)	# yesterday's kwh
-            msgs.append((mqtt_topic + "kwh_yesterday", kwh_yesterday, 0, False))
+            # Yield Yesterday
+            kwh_yesterday = float(int(hexdata[inverter_yes*2:inverter_yes*2+4],16))/100
+            status["kwh_yesterday"] = kwh_yesterday
 
-            kwh_month = str(int(hexdata[inverter_mth*2:inverter_mth*2+4],16))					# running total kwh for month
-            msgs.append((mqtt_topic + "kwh_month", kwh_month, 0, False))
+            # Yield Month
+            kwh_month = int(hexdata[inverter_mth*2:inverter_mth*2+4],16)
+            status["kwh_month"] = kwh_month
 
-            kwh_lastmonth = str(int(hexdata[inverter_lmth*2:inverter_lmth*2+4],16))				# running total kwh for last month
-            msgs.append((mqtt_topic + "kwn_lastmonth", kwh_lastmonth, 0, False))
+            # Yield Previous Month
+            kwh_lastmonth = int(hexdata[inverter_lmth*2:inverter_lmth*2+4],16)
+            status["kwh_lastmonth"] = kwh_lastmonth
 
-            timestamp = (time.strftime("%F %H:%M"))		# get date time
-
-            publish.multiple(msgs, hostname=mqtt_server, port=mqtt_port, auth=None)
+            publish.single(mqtt_topic, json.dumps(status), hostname=mqtt_server, port=mqtt_port, auth=None, retain=True)
 
     conn.close()
 
