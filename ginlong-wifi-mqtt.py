@@ -79,45 +79,49 @@ def main(argv):
 
     # Home Assistant
     if (homeassistant):
+        print("Configuring Home Assistant...")
+
         discovery_msgs = []
 
         # Generating power in watts
-        watt_now_topic = "homeassistant/sensor/inverter_" + client_id + "/watt_now/config"
-        watt_now_payload = {"device_class": "power", "device": {"identifiers": ["ginlong_" + client_id], "manufacturer": "Ginlong", "name": client_id}, "unique_id": client_id + "_watt_now_ginlong", "name": "Current Power", "state_topic": mqtt_topic, "unit_of_measurement": "W", "value_template": "{{ value_json.watt_now}}" }
+        watt_now_topic = "homeassistant/sensor/ginlong_inverter_" + client_id + "/watt_now/config"
+        watt_now_payload = {"device_class": "power", "device": {"identifiers": ["ginlong_inverter_" + client_id], "manufacturer": "Ginlong", "name": client_id}, "unique_id": "ginlong_inverter_" + client_id + "_watt_now", "name": "ginlong_inverter_" + client_id + "_current_power", "state_topic": mqtt_topic, "unit_of_measurement": "W", "value_template": "{{ value_json.watt_now}}" }
         discovery_msgs.append({'topic': watt_now_topic, 'payload': json.dumps(watt_now_payload)})
 
         # Running total kWH for the day
-        kwh_day_topic = "homeassistant/sensor/inverter_" + client_id + "/kwh_day/config"
-        kwh_day_payload = {"device_class": "power", "device": {"identifiers": ["ginlong_" + client_id], "manufacturer": "Ginlong", "name": client_id}, "unique_id": client_id + "_kwh_day_ginlong", "name": "Yield Today", "state_topic": mqtt_topic, "unit_of_measurement": "kWH", "value_template": "{{ value_json.kwh_day}}"}
+        kwh_day_topic = "homeassistant/sensor/ginlong_inverter_" + client_id + "/kwh_day/config"
+        kwh_day_payload = {"device_class": "power", "device": {"identifiers": ["ginlong_inverter_" + client_id], "manufacturer": "Ginlong", "name": client_id}, "unique_id": "ginlong_inverter_" + client_id + "_kwh_day", "name": "ginlong_inverter_" + client_id + "_yield_today", "state_topic": mqtt_topic, "unit_of_measurement": "kWH", "value_template": "{{ value_json.kwh_day}}"}
         discovery_msgs.append({'topic': kwh_day_topic, 'payload': json.dumps(kwh_day_payload)})
 
         # Running total kWH for all time
-        kwh_total_topic = "homeassistant/sensor/inverter_" + client_id + "/kwh_total/config"
-        kwh_total_payload = {"device_class": "power", "device": {"identifiers": ["ginlong_" + client_id], "manufacturer": "Ginlong", "name": client_id}, "unique_id": client_id + "_kwh_total_ginlong", "name": "Total Yield", "state_topic": mqtt_topic, "unit_of_measurement": "kWH", "value_template": "{{ value_json.kwh_total}}"}
+        kwh_total_topic = "homeassistant/sensor/ginlong_inverter_" + client_id + "/kwh_total/config"
+        kwh_total_payload = {"device_class": "power", "device": {"identifiers": ["ginlong_inverter_" + client_id], "manufacturer": "Ginlong", "name": client_id}, "unique_id": "ginlong_inverter_" + client_id + "_kwh_total", "name": "ginlong_inverter_" + client_id + "_total_yield", "state_topic": mqtt_topic, "unit_of_measurement": "kWH", "value_template": "{{ value_json.kwh_total}}"}
         discovery_msgs.append({'topic': kwh_total_topic, 'payload': json.dumps(kwh_total_payload)})
 
         # Temperature
-        temp_topic = "homeassistant/sensor/inverter_" + client_id + "/temp/config"
-        temp_payload = {"device_class": "temperature", "device": {"identifiers": ["ginlong_" + client_id], "manufacturer": "Ginlong", "name": client_id}, "unique_id": client_id + "_temp_ginlong", "name": "Temperature", "state_topic": mqtt_topic, "unit_of_measurement": "°C", "value_template": "{{ value_json.temp}}"}
+        temp_topic = "homeassistant/sensor/ginlong_inverter_" + client_id + "/temp/config"
+        temp_payload = {"device_class": "temperature", "device": {"identifiers": ["ginlong_inverter_" + client_id], "manufacturer": "Ginlong", "name": client_id}, "unique_id": "ginlong_inverter_" + client_id + "_temp", "name": "ginlong_inverter_" + client_id + "_temperature", "state_topic": mqtt_topic, "unit_of_measurement": "°C", "value_template": "{{ value_json.temp}}"}
         discovery_msgs.append({'topic': temp_topic, 'payload': json.dumps(temp_payload)})
 
         publish.multiple(discovery_msgs, hostname=mqtt_server, port=mqtt_port, auth=None)
 
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)   # create socket on required port
+    # Create socket on required port
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     sock.bind((listen_address, listen_port))
-    sock.listen(1) # listen on port
+    sock.listen(1)
 
     while True:
 
         print('Waiting for a connection...')
         
-        conn, addr = sock.accept()				# wait for inverter connection
+        conn, addr = sock.accept()
     
         print('Connection from', addr)
         
-        rawdata = conn.recv(1000)				# read incoming data
-        hexdata = binascii.hexlify(rawdata)		# convert data to hex
+        # Read incoming data
+        rawdata = conn.recv(1000)
+        hexdata = rawdata.hex()
 
         if (hexdata[0:8] == header and len(hexdata) == data_size):
             status = {}
@@ -178,7 +182,12 @@ def main(argv):
             kwh_lastmonth = int(hexdata[inverter_lmth*2:inverter_lmth*2+4],16)
             status["kwh_lastmonth"] = kwh_lastmonth
 
+            print(status)
+
             publish.single(mqtt_topic, json.dumps(status), hostname=mqtt_server, port=mqtt_port, auth=None, retain=True)
+
+        else:
+            print("Unsupported payload: ", hexdata)
 
     conn.close()
 
