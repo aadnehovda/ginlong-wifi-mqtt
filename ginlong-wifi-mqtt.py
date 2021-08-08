@@ -115,81 +115,92 @@ def main(argv):
 
         print('Waiting for a connection...')
         
+        sock.settimeout(None)
         conn, addr = sock.accept()
-    
-        print('Connection from', addr)
-        
-        # Read incoming data
-        rawdata = conn.recv(1000)
-        hexdata = rawdata.hex()
+        conn.settimeout(60.0)
 
-        if (hexdata[0:8] == header and len(hexdata) == data_size):
-            status = {}
+        try:
+            print('Connection from', addr)
 
-            # Current power in watts
-            watt_now = int(hexdata[inverter_now*2:inverter_now*2+4],16)
-            status["watt_now"] = watt_now
+            # Read incoming data
+            rawdata = conn.recv(1000)
+            hexdata = rawdata.hex()
 
-            # Yield today
-            kwh_day = float(int(hexdata[inverter_day*2:inverter_day*2+4],16))/100
-            status["kwh_day"] = kwh_day
+            if (hexdata[0:8] == header and len(hexdata) == data_size):
+                status = {}
 
-            # Total Yield
-            kwh_total = int(hexdata[inverter_tot*2:inverter_tot*2+8],16)/10
-            status["kwh_total"] = kwh_total
+                # Current power in watts
+                watt_now = int(hexdata[inverter_now*2:inverter_now*2+4],16)
+                status["watt_now"] = watt_now
 
-            # Temperature
-            temp = float(int(hexdata[inverter_temp*2:inverter_temp*2+4],16))/10
-            status["temp"] = temp
+                # Yield today
+                kwh_day = float(int(hexdata[inverter_day*2:inverter_day*2+4],16))/100
+                status["kwh_day"] = kwh_day
 
-            # Input DC Volts from Chain 1
-            dc_volts1= float(int(hexdata[inverter_vdc1*2:inverter_vdc1*2+4],16))/10
-            status["dc_volts1"] = dc_volts1
+                # Total Yield
+                kwh_total = int(hexdata[inverter_tot*2:inverter_tot*2+8],16)/10
+                status["kwh_total"] = kwh_total
 
-            # Input DC Volts from Chain 2
-            dc_volts2= float(int(hexdata[inverter_vdc2*2:inverter_vdc2*2+4],16))/10
-            status["dc_volts2"] = dc_volts2
+                # Temperature
+                temp = float(int(hexdata[inverter_temp*2:inverter_temp*2+4],16))/10
+                status["temp"] = temp
 
-            # Input DC Amps from Chain 1
-            dc_amps1 = float(int(hexdata[inverter_adc1*2:inverter_adc1*2+4],16))/10
-            status["dc_amps1"] = dc_amps1
+                # Input DC Volts from Chain 1
+                dc_volts1= float(int(hexdata[inverter_vdc1*2:inverter_vdc1*2+4],16))/10
+                status["dc_volts1"] = dc_volts1
 
-            # Input DC Amps from Chain 2
-            dc_amps2 = float(int(hexdata[inverter_adc2*2:inverter_adc2*2+4],16))/10
-            status["dc_amps2"] = dc_amps2
+                # Input DC Volts from Chain 2
+                dc_volts2= float(int(hexdata[inverter_vdc2*2:inverter_vdc2*2+4],16))/10
+                status["dc_volts2"] = dc_volts2
 
-            # Output AC Volts
-            ac_volts = float(int(hexdata[inverter_vac*2:inverter_vac*2+4],16))/10
-            status["ac_volts"] = ac_volts
+                # Input DC Amps from Chain 1
+                dc_amps1 = float(int(hexdata[inverter_adc1*2:inverter_adc1*2+4],16))/10
+                status["dc_amps1"] = dc_amps1
 
-            # Output AC Amps
-            ac_amps = float(int(hexdata[inverter_aac*2:inverter_aac*2+4],16))/10
-            status["ac_amps"] = ac_amps
+                # Input DC Amps from Chain 2
+                dc_amps2 = float(int(hexdata[inverter_adc2*2:inverter_adc2*2+4],16))/10
+                status["dc_amps2"] = dc_amps2
 
-            # Output AC Frequency Hz
-            ac_freq = float(int(hexdata[inverter_freq*2:inverter_freq*2+4],16))/100
-            status["ac_freq"] = ac_freq
+                # Output AC Volts
+                ac_volts = float(int(hexdata[inverter_vac*2:inverter_vac*2+4],16))/10
+                status["ac_volts"] = ac_volts
 
-            # Yield Yesterday
-            kwh_yesterday = float(int(hexdata[inverter_yes*2:inverter_yes*2+4],16))/100
-            status["kwh_yesterday"] = kwh_yesterday
+                # Output AC Amps
+                ac_amps = float(int(hexdata[inverter_aac*2:inverter_aac*2+4],16))/10
+                status["ac_amps"] = ac_amps
 
-            # Yield Month
-            kwh_month = int(hexdata[inverter_mth*2:inverter_mth*2+4],16)
-            status["kwh_month"] = kwh_month
+                # Output AC Frequency Hz
+                ac_freq = float(int(hexdata[inverter_freq*2:inverter_freq*2+4],16))/100
+                status["ac_freq"] = ac_freq
 
-            # Yield Previous Month
-            kwh_lastmonth = int(hexdata[inverter_lmth*2:inverter_lmth*2+4],16)
-            status["kwh_lastmonth"] = kwh_lastmonth
+                # Yield Yesterday
+                kwh_yesterday = float(int(hexdata[inverter_yes*2:inverter_yes*2+4],16))/100
+                status["kwh_yesterday"] = kwh_yesterday
 
-            print(status)
+                # Yield Month
+                kwh_month = int(hexdata[inverter_mth*2:inverter_mth*2+4],16)
+                status["kwh_month"] = kwh_month
 
-            publish.single(mqtt_topic, json.dumps(status), hostname=mqtt_server, port=mqtt_port, auth=None, retain=True)
+                # Yield Previous Month
+                kwh_lastmonth = int(hexdata[inverter_lmth*2:inverter_lmth*2+4],16)
+                status["kwh_lastmonth"] = kwh_lastmonth
 
-        else:
-            print("Unsupported payload: ", hexdata)
+                print(status)
 
-    conn.close()
+                publish.single(mqtt_topic, json.dumps(status), hostname=mqtt_server, port=mqtt_port, auth=None, retain=True)
+
+            else:
+                print("Unsupported payload: ", hexdata)
+
+        except socket.timeout:
+            print("Socket timeout occurred!")
+
+        except:
+            print("Exception: ", sys.exc_info()[0])
+
+        finally:
+            print("...Shutting down.")
+            conn.shutdown(socket.SHUT_RDWR)
 
 if __name__ == "__main__":
    main(sys.argv[1:])
