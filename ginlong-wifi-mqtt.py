@@ -199,7 +199,6 @@ def main(argv):
             print("Exception: ", sys.exc_info()[0])
 
         finally:
-            print("...Shutting down.")
             conn.shutdown(socket.SHUT_RDWR)
 
 if __name__ == "__main__":
