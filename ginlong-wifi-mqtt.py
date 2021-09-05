@@ -182,7 +182,7 @@ def main(argv):
                 status["kwh_month"] = kwh_month
 
                 # Yield Previous Month
-                kwh_lastmonth = int(hexdata[inverter_lmth*2:intotal_increasingverter_lmth*2+4],16)
+                kwh_lastmonth = int(hexdata[inverter_lmth*2:inverter_lmth*2+4],16)
                 status["kwh_lastmonth"] = kwh_lastmonth
 
                 print(status)
