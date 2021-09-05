@@ -90,12 +90,12 @@ def main(argv):
 
         # Running total kWH for the day
         kwh_day_topic = "homeassistant/sensor/ginlong_inverter_" + client_id + "/kwh_day/config"
-        kwh_day_payload = {"device_class": "energy", "device": {"identifiers": ["ginlong_inverter_" + client_id], "manufacturer": "Ginlong", "name": client_id}, "unique_id": "ginlong_inverter_" + client_id + "_kwh_day", "name": "ginlong_inverter_" + client_id + "_yield_today", "state_topic": mqtt_topic, "unit_of_measurement": "kWH", "value_template": "{{ value_json.kwh_day}}"}
+        kwh_day_payload = {"device_class": "energy", "device": {"identifiers": ["ginlong_inverter_" + client_id], "manufacturer": "Ginlong", "name": client_id}, "unique_id": "ginlong_inverter_" + client_id + "_kwh_day", "name": "ginlong_inverter_" + client_id + "_yield_today", "state_topic": mqtt_topic, "unit_of_measurement": "kWh", "value_template": "{{ value_json.kwh_day}}"}
         discovery_msgs.append({ 'topic': kwh_day_topic, 'payload': json.dumps(kwh_day_payload), 'retain': True })
 
         # Running total kWH for all time
         kwh_total_topic = "homeassistant/sensor/ginlong_inverter_" + client_id + "/kwh_total/config"
-        kwh_total_payload = {"device_class": "energy", "device": {"identifiers": ["ginlong_inverter_" + client_id], "manufacturer": "Ginlong", "name": client_id}, "unique_id": "ginlong_inverter_" + client_id + "_kwh_total", "name": "ginlong_inverter_" + client_id + "_total_yield", "state_topic": mqtt_topic, "unit_of_measurement": "kWH", "value_template": "{{ value_json.kwh_total}}"}
+        kwh_total_payload = {"device_class": "energy", "device": {"identifiers": ["ginlong_inverter_" + client_id], "manufacturer": "Ginlong", "name": client_id}, "unique_id": "ginlong_inverter_" + client_id + "_kwh_total", "name": "ginlong_inverter_" + client_id + "_total_yield", "state_topic": mqtt_topic, "unit_of_measurement": "kWh", "value_template": "{{ value_json.kwh_total}}"}
         discovery_msgs.append({ 'topic': kwh_total_topic, 'payload': json.dumps(kwh_total_payload), 'retain': True })
 
         # Temperature
@@ -182,7 +182,7 @@ def main(argv):
                 status["kwh_month"] = kwh_month
 
                 # Yield Previous Month
-                kwh_lastmonth = int(hexdata[inverter_lmth*2:inverter_lmth*2+4],16)
+                kwh_lastmonth = int(hexdata[inverter_lmth*2:intotal_increasingverter_lmth*2+4],16)
                 status["kwh_lastmonth"] = kwh_lastmonth
 
                 print(status)
