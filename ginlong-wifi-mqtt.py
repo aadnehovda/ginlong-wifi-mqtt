@@ -193,7 +193,7 @@ def main(argv):
                 print("Unsupported payload: ", hexdata)
 
         except socket.timeout:
-            print("Socket timeout occurr`ed!")
+            print("Socket timeout occurred!")
 
         except:
             print("Exception: ", sys.exc_info()[0])
