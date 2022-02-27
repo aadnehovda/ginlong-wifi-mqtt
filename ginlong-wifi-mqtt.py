@@ -17,7 +17,7 @@
 #
 ###################################################################################################
 
-import paho.mqtt.publish as publish
+import paho.mqtt.client as mqtt
 import argparse
 import socket
 import binascii
@@ -68,6 +68,16 @@ mqtt_password = args['mqtt_password']
 homeassistant = args.get('homeassistant')
 mqtt_topic = ''.join(["ginlong", "/", "inverter", "_", client_id])
 
+def on_connect(client, obj, flags, rc):
+    print("MQTT connected...")
+
+# Create MQTT client
+mqttc = mqtt.Client()
+mqttc.on_connect = on_connect
+mqttc.username_pw_set(mqtt_username,mqtt_password)
+mqttc.connect(mqtt_address, mqtt_port, 60)
+mqttc.loop_start()
+
 # Home Assistant
 if (homeassistant):
     print("Configuring Home Assistant...")
@@ -77,24 +87,22 @@ if (homeassistant):
     # Generating power in watts
     watt_now_topic = "homeassistant/sensor/ginlong_inverter_" + client_id + "/watt_now/config"
     watt_now_payload = {"device_class": "power", "state_class": "measurement", "device": {"identifiers": ["ginlong_inverter_" + client_id], "manufacturer": "Ginlong", "name": client_id}, "unique_id": "ginlong_inverter_" + client_id + "_watt_now", "name": "ginlong_inverter_" + client_id + "_current_power", "state_topic": mqtt_topic, "unit_of_measurement": "W", "value_template": "{{ value_json.watt_now}}" }
-    discovery_msgs.append({ 'topic': watt_now_topic, 'payload': json.dumps(watt_now_payload), 'retain': True })
+    mqttc.publish(watt_now_topic, json.dumps(watt_now_payload), retain=True)
 
     # Running total kWH for the day
     kwh_day_topic = "homeassistant/sensor/ginlong_inverter_" + client_id + "/kwh_day/config"
     kwh_day_payload = {"device_class": "energy", "state_class": "total_increasing", "device": {"identifiers": ["ginlong_inverter_" + client_id], "manufacturer": "Ginlong", "name": client_id}, "unique_id": "ginlong_inverter_" + client_id + "_kwh_day", "name": "ginlong_inverter_" + client_id + "_yield_today", "state_topic": mqtt_topic, "unit_of_measurement": "kWh", "value_template": "{{ value_json.kwh_day}}"}
-    discovery_msgs.append({ 'topic': kwh_day_topic, 'payload': json.dumps(kwh_day_payload), 'retain': True })
+    mqttc.publish(kwh_day_topic, json.dumps(kwh_day_payload), retain=True)
 
     # Running total kWH for all time
     kwh_total_topic = "homeassistant/sensor/ginlong_inverter_" + client_id + "/kwh_total/config"
     kwh_total_payload = {"device_class": "energy", "state_class": "total_increasing", "device": {"identifiers": ["ginlong_inverter_" + client_id], "manufacturer": "Ginlong", "name": client_id}, "unique_id": "ginlong_inverter_" + client_id + "_kwh_total", "name": "ginlong_inverter_" + client_id + "_total_yield", "state_topic": mqtt_topic, "unit_of_measurement": "kWh", "value_template": "{{ value_json.kwh_total}}"}
-    discovery_msgs.append({ 'topic': kwh_total_topic, 'payload': json.dumps(kwh_total_payload), 'retain': True })
+    mqttc.publish(kwh_total_topic, json.dumps(kwh_total_payload), retain=True)
 
     # Temperature
     temp_topic = "homeassistant/sensor/ginlong_inverter_" + client_id + "/temp/config"
     temp_payload = {"device_class": "temperature", "state_class": "measurement", "device": {"identifiers": ["ginlong_inverter_" + client_id], "manufacturer": "Ginlong", "name": client_id}, "unique_id": "ginlong_inverter_" + client_id + "_temp", "name": "ginlong_inverter_" + client_id + "_temperature", "state_topic": mqtt_topic, "unit_of_measurement": "°C", "value_template": "{{ value_json.temp}}"}
-    discovery_msgs.append({ 'topic': temp_topic, 'payload': json.dumps(temp_payload), 'retain': True })
-
-    publish.multiple(discovery_msgs, hostname=mqtt_address, port=mqtt_port, auth=None)
+    mqttc.publish(temp_topic, json.dumps(temp_payload), retain=True)
 
 # Create socket on required port
 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -178,7 +186,7 @@ while True:
 
             print(status)
 
-            publish.single(mqtt_topic, json.dumps(status), hostname=mqtt_address, port=mqtt_port, auth=None, retain=True)
+            mqttc.publish(mqtt_topic, json.dumps(status), retain=True)
 
         else:
             print("Unsupported payload: ", hexdata)

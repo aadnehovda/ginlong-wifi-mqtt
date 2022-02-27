@@ -26,5 +26,12 @@ Install dependencies:
 
 Run the application:
 
-    python ./ginlong-wifi-mqtt.py
+    python ./ginlong-wifi-mqtt.py [--listen_address LISTEN_ADDRESS]
+                                  [--listen_port LISTEN_PORT]
+                                  [--client_id CLIENT_ID]
+                                  [--mqtt_address MQTT_ADDRESS]
+                                  [--mqtt_port MQTT_PORT]
+                                  [--mqtt_username MQTT_USERNAME]
+                                  [--mqtt_password MQTT_PASSWORD] [--hass]
+
 
