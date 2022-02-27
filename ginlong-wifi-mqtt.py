@@ -54,7 +54,7 @@ parser.add_argument('--mqtt_address', required=False, default='localhost',  help
 parser.add_argument('--mqtt_port', required=False, default=1883, help='MQTT port. Default: 1883')
 parser.add_argument('--mqtt_username', required=False, default='', help='MQTT username.')
 parser.add_argument('--mqtt_password', required=False, default='', help='MQTT password.')
-parser.add_argument('--hass', default=False, action='store_true', help='Enable Home Assistant auto-discovery')
+parser.add_argument('--homeassistant', default=False, action='store_true', help='Enable Home Assistant auto-discovery')
 args = vars(parser.parse_args())
 
 # Variables
@@ -81,8 +81,6 @@ mqttc.loop_start()
 # Home Assistant
 if (homeassistant):
     print("Configuring Home Assistant...")
-
-    discovery_msgs = []
 
     # Generating power in watts
     watt_now_topic = "homeassistant/sensor/ginlong_inverter_" + client_id + "/watt_now/config"
