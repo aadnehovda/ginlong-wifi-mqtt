@@ -48,10 +48,10 @@ inverter_lmth = 91					# offset 91 & 92 total kWh for last month
 # Parse command-line arguments
 parser = argparse.ArgumentParser(description='Glow MQTT Client.')
 parser.add_argument('--listen_address', required=False, default='0.0.0.0', help='IP address to listen on. Default: 0.0.0.0')
-parser.add_argument('--listen_port', required=False, default=9999, help='Port to listen on. Default: 9999')
+parser.add_argument('--listen_port', required=False, type=int, default=9999, help='Port to listen on. Default: 9999')
 parser.add_argument('--client_id', required=False, help='Client ID to differentiate between inverters. Default: home')
 parser.add_argument('--mqtt_address', required=False, default='localhost',  help='MQTT broker address. Default: localhost')
-parser.add_argument('--mqtt_port', required=False, default=1883, help='MQTT port. Default: 1883')
+parser.add_argument('--mqtt_port', required=False, type=int, default=1883, help='MQTT port. Default: 1883')
 parser.add_argument('--mqtt_username', required=False, default='', help='MQTT username.')
 parser.add_argument('--mqtt_password', required=False, default='', help='MQTT password.')
 parser.add_argument('--homeassistant', default=False, action='store_true', help='Enable Home Assistant auto-discovery')
@@ -59,10 +59,10 @@ args = vars(parser.parse_args())
 
 # Variables
 listen_address = args['listen_address']
-listen_port = args['listen_port']
+listen_port = int(args['listen_port'])
 client_id = args['client_id']
 mqtt_address = args['mqtt_address']
-mqtt_port = args['mqtt_port']
+mqtt_port = int(args['mqtt_port'])
 mqtt_username = args['mqtt_username']
 mqtt_password = args['mqtt_password']
 homeassistant = args.get('homeassistant')
