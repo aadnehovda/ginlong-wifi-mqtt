@@ -32,6 +32,6 @@ Run the application:
                                   [--mqtt_address MQTT_ADDRESS]
                                   [--mqtt_port MQTT_PORT]
                                   [--mqtt_username MQTT_USERNAME]
-                                  [--mqtt_password MQTT_PASSWORD] [--hass]
+                                  [--mqtt_password MQTT_PASSWORD] [--homeassistant]
 
 
