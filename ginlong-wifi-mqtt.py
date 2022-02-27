@@ -23,9 +23,7 @@ import binascii
 import time
 import sys
 import string
-import configparser
 import io
-import getopt
 import json
 
 # Inverter values found (so far) all big endian 16 bit unsigned
@@ -46,160 +44,150 @@ inverter_tot = 71 					# offset 71 & 72 & 73 & 74 total kWh (/10)
 inverter_mth = 87					# offset 87 & 88 total kWh for month 
 inverter_lmth = 91					# offset 91 & 92 total kWh for last month 
 
-config_file = "config.ini"
+# Parse command-line arguments
+parser = argparse.ArgumentParser(description='Glow MQTT Client.')
+parser.add_argument('--listen_address', required=False, help='IP address to listen on. Default: 0.0.0.0')
+parser.add_argument('--listen_port', required=False, help='Port to listen on. Default: 9999')
+parser.add_argument('--client_id', required=False, help='Client ID to differentiate between inverters. Default: home')
+parser.add_argument('--mqtt_address', required=False, default='localhost',  help='MQTT broker address. Default: localhost')
+parser.add_argument('--mqtt_port', required=False, default=1883, help='MQTT port. Default: 1883')
+parser.add_argument('--mqtt_username', required=False, default='', help='MQTT username.')
+parser.add_argument('--mqtt_password', required=False, default='', help='MQTT password.')
+parser.add_argument('--hass', default=False, action='store_true', help='Enable Home Assistant auto-discovery')
+args = vars(parser.parse_args())
 
-def main(argv):
-    # Get command-line arguments
+# Variables
+listen_address = args['listen_address']
+listen_port = args['listen_port']
+client_id = args['client_id']
+mqtt_address = args['mqtt_address']
+mqtt_port = args['mqtt_port']
+mqtt_username = args['mqtt_username']
+mqtt_password = args['mqtt_password']
+homeassistant = args.get('homeassistant')
+mqtt_topic = ''.join(["ginlong", "/", "inverter", "_", client_id])
+
+# Home Assistant
+if (homeassistant):
+    print("Configuring Home Assistant...")
+
+    discovery_msgs = []
+
+    # Generating power in watts
+    watt_now_topic = "homeassistant/sensor/ginlong_inverter_" + client_id + "/watt_now/config"
+    watt_now_payload = {"device_class": "power", "state_class": "measurement", "device": {"identifiers": ["ginlong_inverter_" + client_id], "manufacturer": "Ginlong", "name": client_id}, "unique_id": "ginlong_inverter_" + client_id + "_watt_now", "name": "ginlong_inverter_" + client_id + "_current_power", "state_topic": mqtt_topic, "unit_of_measurement": "W", "value_template": "{{ value_json.watt_now}}" }
+    discovery_msgs.append({ 'topic': watt_now_topic, 'payload': json.dumps(watt_now_payload), 'retain': True })
+
+    # Running total kWH for the day
+    kwh_day_topic = "homeassistant/sensor/ginlong_inverter_" + client_id + "/kwh_day/config"
+    kwh_day_payload = {"device_class": "energy", "state_class": "total_increasing", "device": {"identifiers": ["ginlong_inverter_" + client_id], "manufacturer": "Ginlong", "name": client_id}, "unique_id": "ginlong_inverter_" + client_id + "_kwh_day", "name": "ginlong_inverter_" + client_id + "_yield_today", "state_topic": mqtt_topic, "unit_of_measurement": "kWh", "value_template": "{{ value_json.kwh_day}}"}
+    discovery_msgs.append({ 'topic': kwh_day_topic, 'payload': json.dumps(kwh_day_payload), 'retain': True })
+
+    # Running total kWH for all time
+    kwh_total_topic = "homeassistant/sensor/ginlong_inverter_" + client_id + "/kwh_total/config"
+    kwh_total_payload = {"device_class": "energy", "state_class": "total_increasing", "device": {"identifiers": ["ginlong_inverter_" + client_id], "manufacturer": "Ginlong", "name": client_id}, "unique_id": "ginlong_inverter_" + client_id + "_kwh_total", "name": "ginlong_inverter_" + client_id + "_total_yield", "state_topic": mqtt_topic, "unit_of_measurement": "kWh", "value_template": "{{ value_json.kwh_total}}"}
+    discovery_msgs.append({ 'topic': kwh_total_topic, 'payload': json.dumps(kwh_total_payload), 'retain': True })
+
+    # Temperature
+    temp_topic = "homeassistant/sensor/ginlong_inverter_" + client_id + "/temp/config"
+    temp_payload = {"device_class": "temperature", "state_class": "measurement", "device": {"identifiers": ["ginlong_inverter_" + client_id], "manufacturer": "Ginlong", "name": client_id}, "unique_id": "ginlong_inverter_" + client_id + "_temp", "name": "ginlong_inverter_" + client_id + "_temperature", "state_topic": mqtt_topic, "unit_of_measurement": "°C", "value_template": "{{ value_json.temp}}"}
+    discovery_msgs.append({ 'topic': temp_topic, 'payload': json.dumps(temp_payload), 'retain': True })
+
+    publish.multiple(discovery_msgs, hostname=mqtt_address, port=mqtt_port, auth=None)
+
+# Create socket on required port
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+sock.bind((listen_address, listen_port))
+sock.listen(1)
+
+while True:
+
+    print('Waiting for a connection...')
+    
+    sock.settimeout(None)
+    conn, addr = sock.accept()
+    conn.settimeout(60.0)
+
     try:
-      opts, args = getopt.getopt(argv,"hc:",["config="])
-    except getopt.GetoptError:
-        print('ginlong-wifi-mqtt.py -c <configfile>')
-        sys.exit(2)
+        print('Connection from', addr)
 
-    for opt, arg in opts:
-        if opt == '-h':
-            print('ginlong-wifi-mqtt.py -c <configfile>')
-            sys.exit()
+        # Read incoming data
+        rawdata = conn.recv(1000)
+        hexdata = rawdata.hex()
 
-        elif opt in ("-c", "--config"):
-            config_file = arg
+        if (hexdata[0:8] == header and len(hexdata) == data_size):
+            status = {}
 
-    # Read config file
-    config = configparser.ConfigParser()
-    config.read_file(open(config_file))
+            # Current power in watts
+            watt_now = int(hexdata[inverter_now*2:inverter_now*2+4],16)
+            status["watt_now"] = watt_now
 
-    # Variables
-    listen_address = config.get('DEFAULT', 'listen_address', fallback='0.0.0.0')
-    listen_port = config.getint('DEFAULT', 'listen_port', fallback=9999)
-    client_id = config.get('MQTT', 'client_id', fallback='home')
-    mqtt_server = config.get('MQTT', 'mqtt_server', fallback='localhost')
-    mqtt_port = config.getint('MQTT', 'mqtt_port', fallback=1883)
-    homeassistant = config.getboolean('MQTT', 'homeassistant', fallback=False)
-    mqtt_topic = ''.join(["ginlong", "/", "inverter", "_", client_id])
+            # Yield today
+            kwh_day = float(int(hexdata[inverter_day*2:inverter_day*2+4],16))/100
+            status["kwh_day"] = kwh_day
 
-    # Home Assistant
-    if (homeassistant):
-        print("Configuring Home Assistant...")
+            # Total Yield
+            kwh_total = int(hexdata[inverter_tot*2:inverter_tot*2+8],16)/10
+            status["kwh_total"] = kwh_total
 
-        discovery_msgs = []
+            # Temperature
+            temp = float(int(hexdata[inverter_temp*2:inverter_temp*2+4],16))/10
+            status["temp"] = temp
 
-        # Generating power in watts
-        watt_now_topic = "homeassistant/sensor/ginlong_inverter_" + client_id + "/watt_now/config"
-        watt_now_payload = {"device_class": "power", "state_class": "measurement", "device": {"identifiers": ["ginlong_inverter_" + client_id], "manufacturer": "Ginlong", "name": client_id}, "unique_id": "ginlong_inverter_" + client_id + "_watt_now", "name": "ginlong_inverter_" + client_id + "_current_power", "state_topic": mqtt_topic, "unit_of_measurement": "W", "value_template": "{{ value_json.watt_now}}" }
-        discovery_msgs.append({ 'topic': watt_now_topic, 'payload': json.dumps(watt_now_payload), 'retain': True })
+            # Input DC Volts from Chain 1
+            dc_volts1= float(int(hexdata[inverter_vdc1*2:inverter_vdc1*2+4],16))/10
+            status["dc_volts1"] = dc_volts1
 
-        # Running total kWH for the day
-        kwh_day_topic = "homeassistant/sensor/ginlong_inverter_" + client_id + "/kwh_day/config"
-        kwh_day_payload = {"device_class": "energy", "state_class": "total_increasing", "device": {"identifiers": ["ginlong_inverter_" + client_id], "manufacturer": "Ginlong", "name": client_id}, "unique_id": "ginlong_inverter_" + client_id + "_kwh_day", "name": "ginlong_inverter_" + client_id + "_yield_today", "state_topic": mqtt_topic, "unit_of_measurement": "kWh", "value_template": "{{ value_json.kwh_day}}"}
-        discovery_msgs.append({ 'topic': kwh_day_topic, 'payload': json.dumps(kwh_day_payload), 'retain': True })
+            # Input DC Volts from Chain 2
+            dc_volts2= float(int(hexdata[inverter_vdc2*2:inverter_vdc2*2+4],16))/10
+            status["dc_volts2"] = dc_volts2
 
-        # Running total kWH for all time
-        kwh_total_topic = "homeassistant/sensor/ginlong_inverter_" + client_id + "/kwh_total/config"
-        kwh_total_payload = {"device_class": "energy", "state_class": "total_increasing", "device": {"identifiers": ["ginlong_inverter_" + client_id], "manufacturer": "Ginlong", "name": client_id}, "unique_id": "ginlong_inverter_" + client_id + "_kwh_total", "name": "ginlong_inverter_" + client_id + "_total_yield", "state_topic": mqtt_topic, "unit_of_measurement": "kWh", "value_template": "{{ value_json.kwh_total}}"}
-        discovery_msgs.append({ 'topic': kwh_total_topic, 'payload': json.dumps(kwh_total_payload), 'retain': True })
+            # Input DC Amps from Chain 1
+            dc_amps1 = float(int(hexdata[inverter_adc1*2:inverter_adc1*2+4],16))/10
+            status["dc_amps1"] = dc_amps1
 
-        # Temperature
-        temp_topic = "homeassistant/sensor/ginlong_inverter_" + client_id + "/temp/config"
-        temp_payload = {"device_class": "temperature", "state_class": "measurement", "device": {"identifiers": ["ginlong_inverter_" + client_id], "manufacturer": "Ginlong", "name": client_id}, "unique_id": "ginlong_inverter_" + client_id + "_temp", "name": "ginlong_inverter_" + client_id + "_temperature", "state_topic": mqtt_topic, "unit_of_measurement": "°C", "value_template": "{{ value_json.temp}}"}
-        discovery_msgs.append({ 'topic': temp_topic, 'payload': json.dumps(temp_payload), 'retain': True })
+            # Input DC Amps from Chain 2
+            dc_amps2 = float(int(hexdata[inverter_adc2*2:inverter_adc2*2+4],16))/10
+            status["dc_amps2"] = dc_amps2
 
-        publish.multiple(discovery_msgs, hostname=mqtt_server, port=mqtt_port, auth=None)
+            # Output AC Volts
+            ac_volts = float(int(hexdata[inverter_vac*2:inverter_vac*2+4],16))/10
+            status["ac_volts"] = ac_volts
 
-    # Create socket on required port
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    sock.bind((listen_address, listen_port))
-    sock.listen(1)
+            # Output AC Amps
+            ac_amps = float(int(hexdata[inverter_aac*2:inverter_aac*2+4],16))/10
+            status["ac_amps"] = ac_amps
 
-    while True:
+            # Output AC Frequency Hz
+            ac_freq = float(int(hexdata[inverter_freq*2:inverter_freq*2+4],16))/100
+            status["ac_freq"] = ac_freq
 
-        print('Waiting for a connection...')
-        
-        sock.settimeout(None)
-        conn, addr = sock.accept()
-        conn.settimeout(60.0)
+            # Yield Yesterday
+            kwh_yesterday = float(int(hexdata[inverter_yes*2:inverter_yes*2+4],16))/100
+            status["kwh_yesterday"] = kwh_yesterday
 
-        try:
-            print('Connection from', addr)
+            # Yield Month
+            kwh_month = int(hexdata[inverter_mth*2:inverter_mth*2+4],16)
+            status["kwh_month"] = kwh_month
 
-            # Read incoming data
-            rawdata = conn.recv(1000)
-            hexdata = rawdata.hex()
+            # Yield Previous Month
+            kwh_lastmonth = int(hexdata[inverter_lmth*2:inverter_lmth*2+4],16)
+            status["kwh_lastmonth"] = kwh_lastmonth
 
-            if (hexdata[0:8] == header and len(hexdata) == data_size):
-                status = {}
+            print(status)
 
-                # Current power in watts
-                watt_now = int(hexdata[inverter_now*2:inverter_now*2+4],16)
-                status["watt_now"] = watt_now
+            publish.single(mqtt_topic, json.dumps(status), hostname=mqtt_address, port=mqtt_port, auth=None, retain=True)
 
-                # Yield today
-                kwh_day = float(int(hexdata[inverter_day*2:inverter_day*2+4],16))/100
-                status["kwh_day"] = kwh_day
+        else:
+            print("Unsupported payload: ", hexdata)
 
-                # Total Yield
-                kwh_total = int(hexdata[inverter_tot*2:inverter_tot*2+8],16)/10
-                status["kwh_total"] = kwh_total
+    except socket.timeout:
+        print("Socket timeout occurred!")
 
-                # Temperature
-                temp = float(int(hexdata[inverter_temp*2:inverter_temp*2+4],16))/10
-                status["temp"] = temp
+    except:
+        print("Exception: ", sys.exc_info()[0])
 
-                # Input DC Volts from Chain 1
-                dc_volts1= float(int(hexdata[inverter_vdc1*2:inverter_vdc1*2+4],16))/10
-                status["dc_volts1"] = dc_volts1
+    finally:
+        conn.shutdown(socket.SHUT_RDWR)
 
-                # Input DC Volts from Chain 2
-                dc_volts2= float(int(hexdata[inverter_vdc2*2:inverter_vdc2*2+4],16))/10
-                status["dc_volts2"] = dc_volts2
-
-                # Input DC Amps from Chain 1
-                dc_amps1 = float(int(hexdata[inverter_adc1*2:inverter_adc1*2+4],16))/10
-                status["dc_amps1"] = dc_amps1
-
-                # Input DC Amps from Chain 2
-                dc_amps2 = float(int(hexdata[inverter_adc2*2:inverter_adc2*2+4],16))/10
-                status["dc_amps2"] = dc_amps2
-
-                # Output AC Volts
-                ac_volts = float(int(hexdata[inverter_vac*2:inverter_vac*2+4],16))/10
-                status["ac_volts"] = ac_volts
-
-                # Output AC Amps
-                ac_amps = float(int(hexdata[inverter_aac*2:inverter_aac*2+4],16))/10
-                status["ac_amps"] = ac_amps
-
-                # Output AC Frequency Hz
-                ac_freq = float(int(hexdata[inverter_freq*2:inverter_freq*2+4],16))/100
-                status["ac_freq"] = ac_freq
-
-                # Yield Yesterday
-                kwh_yesterday = float(int(hexdata[inverter_yes*2:inverter_yes*2+4],16))/100
-                status["kwh_yesterday"] = kwh_yesterday
-
-                # Yield Month
-                kwh_month = int(hexdata[inverter_mth*2:inverter_mth*2+4],16)
-                status["kwh_month"] = kwh_month
-
-                # Yield Previous Month
-                kwh_lastmonth = int(hexdata[inverter_lmth*2:inverter_lmth*2+4],16)
-                status["kwh_lastmonth"] = kwh_lastmonth
-
-                print(status)
-
-                publish.single(mqtt_topic, json.dumps(status), hostname=mqtt_server, port=mqtt_port, auth=None, retain=True)
-
-            else:
-                print("Unsupported payload: ", hexdata)
-
-        except socket.timeout:
-            print("Socket timeout occurred!")
-
-        except:
-            print("Exception: ", sys.exc_info()[0])
-
-        finally:
-            conn.shutdown(socket.SHUT_RDWR)
-
-if __name__ == "__main__":
-   main(sys.argv[1:])

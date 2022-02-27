@@ -1,9 +1,0 @@
-[DEFAULT]
-listen_address = 0.0.0.0
-listen_port = 9999
-
-[MQTT]
-client_id = home
-mqtt_server = localhost
-mqtt_port = 1883
-homeassistant = false
