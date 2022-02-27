@@ -18,6 +18,7 @@
 ###################################################################################################
 
 import paho.mqtt.publish as publish
+import argparse
 import socket
 import binascii
 import time
@@ -46,8 +47,8 @@ inverter_lmth = 91					# offset 91 & 92 total kWh for last month
 
 # Parse command-line arguments
 parser = argparse.ArgumentParser(description='Glow MQTT Client.')
-parser.add_argument('--listen_address', required=False, help='IP address to listen on. Default: 0.0.0.0')
-parser.add_argument('--listen_port', required=False, help='Port to listen on. Default: 9999')
+parser.add_argument('--listen_address', required=False, default='0.0.0.0', help='IP address to listen on. Default: 0.0.0.0')
+parser.add_argument('--listen_port', required=False, default=9999, help='Port to listen on. Default: 9999')
 parser.add_argument('--client_id', required=False, help='Client ID to differentiate between inverters. Default: home')
 parser.add_argument('--mqtt_address', required=False, default='localhost',  help='MQTT broker address. Default: localhost')
 parser.add_argument('--mqtt_port', required=False, default=1883, help='MQTT port. Default: 1883')
