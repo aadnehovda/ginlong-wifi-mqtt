@@ -1,0 +1,34 @@
+services:
+  tcp-server:
+    image: ${GINLONG_IMAGE:-ginlong-wifi-mqtt:0.2.1}
+    command:
+      - serve
+      - --client-id
+      - ${GINLONG_CLIENT_ID:-solis}
+      - --homeassistant
+      - --discover
+      - --logger-mac
+      - ${GINLONG_LOGGER_MAC}
+      - --discovery-broadcast
+      - ${GINLONG_DISCOVERY_BROADCAST:-255.255.255.255}
+      - --poll-host
+      - ${GINLONG_POLL_HOST}
+      - --logger-serial
+      - ${GINLONG_LOGGER_SERIAL}
+      - --poll-interval
+      - ${GINLONG_POLL_INTERVAL:-60}
+    networks:
+      - host
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.hostname == ${GINLONG_NODE}
+      restart_policy:
+        condition: any
+        delay: 5s
+
+networks:
+  host:
+    external: true
+    name: host

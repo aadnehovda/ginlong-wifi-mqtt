@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ginlong-wifi-mqtt"
+version = "0.2.1"
+description = "Publish Ginlong/Solis WiFi stick inverter reports to MQTT"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "GPL-3.0-or-later"
+dependencies = [
+    "aiomqtt==2.5.1",
+]
+
+[dependency-groups]
+dev = [
+    "pytest==8.4.2",
+    "pytest-asyncio==1.2.0",
+]
+
+[project.scripts]
+ginlong-wifi-mqtt = "ginlong_wifi_mqtt.app:cli"
+
+[tool.pytest.ini_options]
+addopts = "-ra"
+testpaths = ["tests"]
+
+[tool.setuptools.packages.find]
+include = ["ginlong_wifi_mqtt*"]
